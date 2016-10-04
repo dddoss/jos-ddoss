@@ -115,7 +115,7 @@ debuginfo_eip(uintptr_t addr, struct Eipdebuginfo *info)
 {
 	const struct Stab *stabs, *stab_end;
 	const char *stabstr, *stabstr_end;
-	int lfile, rfile, lfun, rfun, lline, rline;
+	int lfile, rfile, lfun, rfun, lline, rline, lnum, rnum;
 
 	// Initialize *info
 	info->eip_file = "<unknown>";
@@ -203,7 +203,15 @@ debuginfo_eip(uintptr_t addr, struct Eipdebuginfo *info)
 	//	There's a particular stabs type used for line numbers.
 	//	Look at the STABS documentation and <inc/stab.h> to find
 	//	which one.
-	// Your code here.
+        stab_binsearch(stabs, &lline, &rline, N_SLINE, addr);
+
+        if (lline <= rline){
+            info->eip_line = stabs[lline].n_desc;
+        }
+        else{
+            // Line number not found!
+            return -1;
+        }
 
 
 	// Search backwards from the line number for the relevant filename
