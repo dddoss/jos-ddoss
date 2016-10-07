@@ -1,0 +1,3 @@
+1. Allowing each exception/interrupt to have its own handler allows for the handlers to accept variable inputs. In particular, some interrupts generate error codes and others do not; to keep a consistent Trapframe structure, it is useful to indicate which case we are in by varying interrupts. We can also specify custom privledge levels for exception handlers (though this is not used in JOS).
+
+2. I did not have to change anything to make softint behave correctly. Users should not be able to explicitly call the kernel's page fault handler, because the IDT specifies that this handler can only be called directly by the kernel (dpl=0). Allowing the user to invoke this handler gives the user a higher level of privledge than is intended, presenting security concerns.
