@@ -256,18 +256,10 @@ handin-check:
 
 UPSTREAM := $(shell git remote -v | grep "pdos.csail.mit.edu/6.828/2016/jos.git (fetch)" | awk '{split($$0,a," "); print a[1]}')
 
-tarball: handin-check
-	git archive --format=tar HEAD > lab$(LAB)-handin.tar
-	git diff $(UPSTREAM)/lab$(LAB) > /tmp/lab$(LAB)diff.patch
-	tar -rf lab$(LAB)-handin.tar /tmp/lab$(LAB)diff.patch
-	gzip -c lab$(LAB)-handin.tar > lab$(LAB)-handin.tar.gz
-	rm lab$(LAB)-handin.tar
-	rm /tmp/lab$(LAB)diff.patch
-
 tarball-pref: handin-check
 	@SUF=$(LAB); \
 	if test $(LAB) -eq 3 -o $(LAB) -eq 4; then \
-		read -p "Which part would you like to submit? [a, b, c (lab 4 only)]" p; \
+		read -p "Which part would you like to submit? [a, b, c (c for lab 4 only)]" p; \
 		if test "$$p" != a -a "$$p" != b; then \
 			if test ! $(LAB) -eq 4 -o ! "$$p" = c; then \
 				echo "Bad part \"$$p\""; \
@@ -279,12 +271,12 @@ tarball-pref: handin-check
 	else \
 		rm -f .suf; \
 	fi; \
-	git archive --format=tar HEAD > lab$(LAB)-handin.tar
-	git diff $(UPSTREAM)/lab$(LAB) > /tmp/lab$(LAB)diff.patch
-	tar -rf lab$(LAB)-handin.tar /tmp/lab$(LAB)diff.patch
-	gzip -c lab$(LAB)-handin.tar > lab$(LAB)-handin.tar.gz
-	rm lab$(LAB)-handin.tar
-	rm /tmp/lab$(LAB)diff.patch
+	git archive --format=tar HEAD > lab$$SUF-handin.tar; \
+	git diff $(UPSTREAM)/lab$(LAB) > /tmp/lab$$SUF-diff.patch; \
+	tar -rf lab$$SUF-handin.tar /tmp/lab$$SUF-diff.patch; \
+	gzip -c lab$$SUF-handin.tar > lab$$SUF-handin.tar.gz; \
+	rm lab$$SUF-handin.tar; \
+	rm /tmp/lab$$SUF-diff.patch; \
 
 myapi.key:
 	@echo Get an API key for yourself by visiting $(WEBSUB)/
