@@ -230,6 +230,7 @@ mem_init(void)
 
 void
 init_kernel_pgdir(pde_t *pgdir){
+        size_t pages_size = npages*sizeof(struct PageInfo);
 	//////////////////////////////////////////////////////////////////////
 	// Now we set up virtual memory
 
