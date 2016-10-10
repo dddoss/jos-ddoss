@@ -70,7 +70,7 @@ static physaddr_t check_va2pa(pde_t *pgdir, uintptr_t va);
 static void check_page(void);
 static void check_page_installed_pgdir(void);
 
-// Free the page pointed at by v,
+// Free the page pointed at by v, and add it to the free pages list.
 // used by boot_alloc.
 //
 // Code references kfree from xv6 kernel
@@ -79,12 +79,12 @@ boot_freepage(char *v)
 {
     struct PageInfo *r;
     if ((uint32_t)v % PGSIZE)
-        panic("freepage got unalgined address");
+        panic("boot_freepage got unaligned address");
     if (PADDR(v) >= npages*PGSIZE)
-        panic("freepage out of memory");
-
-    if ((uint32_t)v>=0xf0400000)
-        cprintf("free page 0x%x\n", (uint32_t)v);
+        panic("boot_freepage out of memory");
+    
+    // Sanity check--initialize all memory here to 1 so anything
+    // accessing it will fail quickly
     memset(v, 1, PGSIZE);
     r = (struct PageInfo*)v;
     r->pp_link = page_free_list;
@@ -128,6 +128,7 @@ boot_alloc(uint32_t n)
         result = nextfree;
         endaddr = ROUNDUP(nextfree+n, PGSIZE);
         for (; nextfree<endaddr; nextfree+=PGSIZE){
+            // Wipe and add this page to the free pages list
             boot_freepage(nextfree);
         }
 
@@ -147,7 +148,7 @@ void
 mem_init(void)
 {
 	uint32_t cr0;
-	size_t n;
+	size_t pages_size; 
 
 	// Find out how much memory the machine has (npages & npages_basemem).
 	i386_detect_memory();
@@ -176,8 +177,9 @@ mem_init(void)
 	// to initialize all fields of each struct PageInfo to 0.
 	// Your code goes here:
 
-        pages = (struct PageInfo *) boot_alloc(npages*sizeof(struct PageInfo));
-        memset(pages, 0, npages*sizeof(struct PageInfo));
+        pages_size = npages*sizeof(struct PageInfo);
+        pages = (struct PageInfo *) boot_alloc(pages_size);
+        memset(pages, 0, pages_size);
         
 
 	//////////////////////////////////////////////////////////////////////
@@ -239,8 +241,8 @@ init_kernel_pgdir(pde_t *pgdir){
 	//    - pages itself -- kernel RW, user NONE
 	// Your code goes here:
 
-        boot_map_region(pgdir, UPAGES, ROUNDUP(npages*sizeof(struct PageInfo), PGSIZE), PADDR(pages), PTE_U | PTE_P);
-        boot_map_region(pgdir, (uintptr_t)pages, ROUNDUP(npages*sizeof(struct PageInfo), PGSIZE), PADDR(pages), PTE_W);
+        boot_map_region(pgdir, UPAGES, ROUNDUP(pages_size, PGSIZE), PADDR(pages), PTE_U | PTE_P);
+        boot_map_region(pgdir, (uintptr_t)pages, ROUNDUP(pages_size, PGSIZE), PADDR(pages), PTE_W);
         
 
 	//////////////////////////////////////////////////////////////////////
@@ -542,13 +544,13 @@ page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
 void
 page_remove(pde_t *pgdir, void *va)
 {
-    pte_t *pageaddr = (pte_t *)1;
+    pte_t *pageaddr = NULL;
     struct PageInfo * page = page_lookup(pgdir, va, &pageaddr);
     if (page == NULL)
         return;
 
-    if (*pageaddr & PTE_P)
-        *pageaddr -= PTE_P;
+    // Make the page not present
+    *pageaddr = 0;
     tlb_invalidate(pgdir, va);
     page_decref(page);
 }
