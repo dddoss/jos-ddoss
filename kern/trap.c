@@ -83,12 +83,13 @@ trap_init(void)
         void vector17();
         void vector18();
         void vector19();
+        void vector48();
 
 	// LAB 3: Your code here.
         SETGATE(idt[0], 0, GD_KT, vector0, 0);
         SETGATE(idt[1], 0, GD_KT, vector1, 0);
         SETGATE(idt[2], 0, GD_KT, vector2, 0);
-        SETGATE(idt[3], 0, GD_KT, vector3, 0);
+        SETGATE(idt[3], 0, GD_KT, vector3, 3); // T_BRKPT, callable by user
         SETGATE(idt[4], 0, GD_KT, vector4, 0);
         SETGATE(idt[5], 0, GD_KT, vector5, 0);
         SETGATE(idt[6], 0, GD_KT, vector6, 0);
@@ -105,6 +106,7 @@ trap_init(void)
         SETGATE(idt[17], 0, GD_KT, vector17, 0);
         SETGATE(idt[18], 0, GD_KT, vector18, 0);
         SETGATE(idt[19], 0, GD_KT, vector19, 0);
+        SETGATE(idt[48], 0, GD_KT, vector48, 3); //T_SYSCALL
 
 	// Per-CPU setup 
 	trap_init_percpu();
@@ -189,6 +191,8 @@ page_fault_handler(struct Trapframe *tf)
 	// Handle kernel-mode page faults.
 
 	// LAB 3: Your code here.
+	if (tf->tf_cs == GD_KT)
+		panic("Page fault within kernel.");
 
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.
@@ -206,18 +210,23 @@ trap_dispatch(struct Trapframe *tf)
 	// Handle processor exceptions.
 	// LAB 3: Your code here.
 
-        /*switch(tf->trapno){
+        switch(tf->tf_trapno){
             case T_PGFLT:
                 page_fault_handler(tf);
                 return; // Never reached
+            case T_BRKPT:
+                monitor(tf);
+                return; // Never reached
+            case T_SYSCALL:
+                tf->tf_regs.reg_eax = syscall(tf->tf_regs.reg_eax, tf->tf_regs.reg_edx, 
+                        tf->tf_regs.reg_ecx, tf->tf_regs.reg_ebx, 
+                        tf->tf_regs.reg_edi, tf->tf_regs.reg_esi);
+                return; // Will be reached
+
             default:
-                if (tf->trapno<32){
-                    cprintf("[%08x] user exception at 0x%x: %s", curenv->env_id, tf->eip, trapname(tf->trapno));
-                    env_destroy
+                break;
 
-                }
-
-        }*/
+        }
         
 
 	// Unexpected trap: The user process or the kernel has a bug.

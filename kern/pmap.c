@@ -591,7 +591,31 @@ static uintptr_t user_mem_check_addr;
 int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
+        perm = perm | PTE_P;
 	// LAB 3: Your code here.
+        // Fail immediately if the range extends past ULIM
+        if ( (uintptr_t) (va+len) > ULIM){
+            if ((uintptr_t) va > ULIM)
+                user_mem_check_addr = (uintptr_t) va;
+            else // The violation happens somewhere in the middle of the space
+                user_mem_check_addr = ULIM;
+            return -E_FAULT;
+        }
+        
+        // Loop through and check every page which is touched
+        // in the range [va, va+len].
+        uintptr_t va_iter = ROUNDDOWN((uintptr_t) va, PGSIZE);
+        pte_t * tableentry;
+        for (; va_iter<(uintptr_t) va+len; va_iter+=PGSIZE){
+            tableentry = pgdir_walk(env->env_pgdir, (const void *)va_iter, 0);
+            if (tableentry == NULL || ((*tableentry & perm) != perm)){
+                if (va_iter < (uintptr_t) va)
+                    user_mem_check_addr = (uintptr_t) va;
+                else
+                    user_mem_check_addr = va_iter;
+                return -E_FAULT;
+            }
+        }
 
 	return 0;
 }
