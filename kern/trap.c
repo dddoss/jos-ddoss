@@ -63,50 +63,13 @@ void
 trap_init(void)
 {
 	extern struct Segdesc gdt[];
-        void vector0();
-        void vector1();
-        void vector2();
-        void vector3();
-        void vector4();
-        void vector5();
-        void vector6();
-        void vector7();
-        void vector8();
-        void vector9();
-        void vector10();
-        void vector11();
-        void vector12();
-        void vector13();
-        void vector14();
-        void vector15();
-        void vector16();
-        void vector17();
-        void vector18();
-        void vector19();
-        void vector48();
+        extern void* vectors[];
 
 	// LAB 3: Your code here.
-        SETGATE(idt[0], 0, GD_KT, vector0, 0);
-        SETGATE(idt[1], 0, GD_KT, vector1, 0);
-        SETGATE(idt[2], 0, GD_KT, vector2, 0);
-        SETGATE(idt[3], 0, GD_KT, vector3, 3); // T_BRKPT, callable by user
-        SETGATE(idt[4], 0, GD_KT, vector4, 0);
-        SETGATE(idt[5], 0, GD_KT, vector5, 0);
-        SETGATE(idt[6], 0, GD_KT, vector6, 0);
-        SETGATE(idt[7], 0, GD_KT, vector7, 0);
-        SETGATE(idt[8], 0, GD_KT, vector8, 0);
-        SETGATE(idt[9], 0, GD_KT, vector9, 0);
-        SETGATE(idt[10], 0, GD_KT, vector10, 0);
-        SETGATE(idt[11], 0, GD_KT, vector11, 0);
-        SETGATE(idt[12], 0, GD_KT, vector12, 0);
-        SETGATE(idt[13], 0, GD_KT, vector13, 0);
-        SETGATE(idt[14], 0, GD_KT, vector14, 0);
-        SETGATE(idt[15], 0, GD_KT, vector15, 0);
-        SETGATE(idt[16], 0, GD_KT, vector16, 0);
-        SETGATE(idt[17], 0, GD_KT, vector17, 0);
-        SETGATE(idt[18], 0, GD_KT, vector18, 0);
-        SETGATE(idt[19], 0, GD_KT, vector19, 0);
-        SETGATE(idt[48], 0, GD_KT, vector48, 3); //T_SYSCALL
+        for (int i = 0; i <= 48; i++)
+            SETGATE(idt[i], 0, GD_KT, vectors[i], 0);
+        SETGATE(idt[T_BRKPT], 0, GD_KT, vectors[T_BRKPT], 3); // T_BRKPT, callable by user
+        SETGATE(idt[T_SYSCALL], 1, GD_KT, vectors[T_SYSCALL], 3); //T_SYSCALL
 
 	// Per-CPU setup 
 	trap_init_percpu();

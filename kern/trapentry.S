@@ -26,7 +26,10 @@
 	.align 2;		/* align function definition */		\
 	name:			/* function starts here */		\
 	pushl $(num);							\
-	jmp _alltraps
+	jmp _alltraps;                                                  \
+        .data;                                                          \
+            .long name;                                                 \
+        .text
 
 /* Use TRAPHANDLER_NOEC for traps where the CPU doesn't push an error code.
  * It pushes a 0 in place of the error code, so the trap frame has the same
@@ -39,8 +42,14 @@
 	name:								\
 	pushl $0;							\
 	pushl $(num);							\
-	jmp _alltraps
+	jmp _alltraps;                                                  \
+        .data;                                                          \
+            .long name;                                                 \
+        .text
 
+.data
+    .globl vectors;
+    vectors:
 .text
 
 /*
@@ -67,13 +76,35 @@ TRAPHANDLER_NOEC(vector16, T_FPERR);
 TRAPHANDLER(vector17, T_ALIGN);
 TRAPHANDLER_NOEC(vector18, T_MCHK);
 TRAPHANDLER_NOEC(vector19, T_SIMDERR);
-
+TRAPHANDLER_NOEC(vector20, 20);
+TRAPHANDLER_NOEC(vector21, 21);
+TRAPHANDLER_NOEC(vector22, 22);
+TRAPHANDLER_NOEC(vector23, 23);
+TRAPHANDLER_NOEC(vector24, 24);
+TRAPHANDLER_NOEC(vector25, 25);
+TRAPHANDLER_NOEC(vector26, 26);
+TRAPHANDLER_NOEC(vector27, 27);
+TRAPHANDLER_NOEC(vector28, 28);
+TRAPHANDLER_NOEC(vector29, 29);
+TRAPHANDLER_NOEC(vector30, 30);
+TRAPHANDLER_NOEC(vector31, 31);
+TRAPHANDLER_NOEC(vector32, 32);
+TRAPHANDLER_NOEC(vector33, 33);
+TRAPHANDLER_NOEC(vector34, 34);
+TRAPHANDLER_NOEC(vector35, 35);
+TRAPHANDLER_NOEC(vector36, 36);
+TRAPHANDLER_NOEC(vector37, 37);
+TRAPHANDLER_NOEC(vector38, 38);
+TRAPHANDLER_NOEC(vector39, 39);
+TRAPHANDLER_NOEC(vector40, 40);
+TRAPHANDLER_NOEC(vector41, 41);
+TRAPHANDLER_NOEC(vector42, 42);
+TRAPHANDLER_NOEC(vector43, 43);
+TRAPHANDLER_NOEC(vector44, 44);
+TRAPHANDLER_NOEC(vector45, 45);
+TRAPHANDLER_NOEC(vector46, 46);
+TRAPHANDLER_NOEC(vector47, 47);
 TRAPHANDLER_NOEC(vector48, T_SYSCALL);
-
-
-
-
-
 
 /*
  * Lab 3: Your code here for _alltraps
