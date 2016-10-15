@@ -1,0 +1,32 @@
+1. Variable x should have type uintptr_t, as the pointer returned by return_a_pointer()
+    and held in *value is a virtual address, and uintptr_t holds virtual addresses.
+
+2.
+    Entry   Base Virtual Address    Points to (logically):
+    1023    0xffc00000              Page table for top 4MB of phys memory
+    1022    0xff800000              Page table for second to last 4MB of phys mem
+    .       .                       .
+    .       .                       .
+    960     0xf0000000              Page table for first 4MB of phys memory
+    959     0xefc00000              Kernel stack
+
+    .       .                       .
+    956     0xef000000              RO copy of pages
+    .       .                       .
+    1       0x00400000              Temporary user page mappings 
+    0       0x00000000              Empty memory and User STAB Data
+
+3. The kernel is protected by the page-level protection schema built into the page
+    table system. Specifically, the Supervisor/User and Read/Write bits restrict
+    what pages a user application can access; therefore, despite being mapped in the
+    same page table, user applications have no power to modify the kernel.
+4. This system can support a maximum of 256MB of physical memory. Exactly 64 page
+    tables are allocated for mapping physical memory; at 4MB each, this limits the
+    total number of available memory to 1024MB.
+5. (See answer 4); every 4MB of physical memory requires a 1KB page of overhead to
+    map it.
+6. The transition to running at an EIP above KERNBASE occurs on line 68 of entry.S,
+    at the call 'jmp *%eax'. It is possible to continue at a low EIP because no translation
+    of linear address has occurred--code is being straight from the physical address space,
+    with EIP incremented relatively from instruction to instruction. This transition is necessary
+    so we can run the C code of the kernel, which is linked above KERNBASE.
