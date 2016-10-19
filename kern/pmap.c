@@ -310,6 +310,11 @@ mem_init_mp(void)
 	//
 	// LAB 4: Your code here:
 
+        uintptr_t kstacktop_i;
+        for (int i = 0; i < NCPU; i++){
+            kstacktop_i = KSTACKTOPI(i);
+            boot_map_region(kern_pgdir, kstacktop_i - KSTKSIZE, KSTKSIZE, PADDR(percpu_kstacks[i]), PTE_W|PTE_P);
+        }
 }
 
 // --------------------------------------------------------------
@@ -353,7 +358,7 @@ page_init(void)
         physaddr_t kernend = PADDR(boot_alloc(0));
 	for (i = 1; i < npages; i++) {
                 pageaddr = (physaddr_t) (i*PGSIZE);
-                if (pageaddr<IOPHYSMEM || pageaddr>kernend){
+                if ((pageaddr<IOPHYSMEM || pageaddr>kernend) && pageaddr != MPENTRY_PADDR){
                         pages[i].pp_ref = 0;
                         pages[i].pp_link = page_free_list;
                         page_free_list = &pages[i];
@@ -488,8 +493,8 @@ boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm
     assert(size%PGSIZE==0);
     for(i = 0; i<size; i+=PGSIZE){
         assert((va+i)<0xffffffff);
-        assert((pa+i)<0xffffffff-KERNBASE);
-        assert((pa+i)<0x0fffffff);
+        //assert((pa+i)<(0xffffffff-KERNBASE));
+        //assert((pa+i)<0x0fffffff);
         entry = pgdir_walk(pgdir, (void *)(va+i), true);
         *entry = (pa+i) | perm | PTE_P;
     }
@@ -635,7 +640,17 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Hint: The staff solution uses boot_map_region.
 	//
 	// Your code here:
-	panic("mmio_map_region not implemented");
+        size_t alloc_size = ROUNDUP(size, PGSIZE);
+        uintptr_t saved_base = base;
+        
+        if (alloc_size + base > MMIOLIM)
+            panic("mmio_map_region: out of memory!");
+
+        cprintf("mmio_map_region pa: 0x%x\n", pa);
+
+        boot_map_region(kern_pgdir, base, alloc_size, pa, PTE_PCD|PTE_PWT|PTE_W);
+        base += alloc_size;
+        return (void *)saved_base;
 }
 
 static uintptr_t user_mem_check_addr;

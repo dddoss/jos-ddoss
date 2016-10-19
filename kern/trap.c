@@ -1,6 +1,7 @@
 #include <inc/mmu.h>
 #include <inc/x86.h>
 #include <inc/assert.h>
+#include <inc/memlayout.h>
 
 #include <kern/pmap.h>
 #include <kern/trap.h>
@@ -109,20 +110,24 @@ trap_init_percpu(void)
 	//
 	// LAB 4: Your code here:
 
+
 	// Setup a TSS so that we get the right stack
 	// when we trap to the kernel.
-	ts.ts_esp0 = KSTACKTOP;
-	ts.ts_ss0 = GD_KD;
-	ts.ts_iomb = sizeof(struct Taskstate);
+        //struct Taskstate this_ts = thiscpu->cpu_ts;
+        struct Taskstate * this_ts = &(thiscpu->cpu_ts);
+	this_ts->ts_esp0 = KSTACKTOPI(thiscpu->cpu_id);
+	this_ts->ts_ss0 = GD_KD;
+	this_ts->ts_iomb = sizeof(struct Taskstate);
 
 	// Initialize the TSS slot of the gdt.
-	gdt[GD_TSS0 >> 3] = SEG16(STS_T32A, (uint32_t) (&ts),
+        int gdt_index = (GD_TSS0 >> 3) + thiscpu->cpu_id;
+	gdt[gdt_index] = SEG16(STS_T32A, (uint32_t) (this_ts),
 					sizeof(struct Taskstate) - 1, 0);
-	gdt[GD_TSS0 >> 3].sd_s = 0;
+	gdt[gdt_index].sd_s = 0;
 
 	// Load the TSS selector (like other segment selectors, the
 	// bottom three bits are special; we leave them 0)
-	ltr(GD_TSS0);
+	ltr(gdt_index << 3);
 
 	// Load the IDT
 	lidt(&idt_pd);
@@ -174,30 +179,6 @@ print_regs(struct PushRegs *regs)
 	cprintf("  eax  0x%08x\n", regs->reg_eax);
 }
 
-void
-page_fault_handler(struct Trapframe *tf)
-{
-	uint32_t fault_va;
-
-	// Read processor's CR2 register to find the faulting address
-	fault_va = rcr2();
-
-	// Handle kernel-mode page faults.
-
-	// LAB 3: Your code here.
-	if (tf->tf_cs == GD_KT)
-		panic("Page fault within kernel.");
-
-	// We've already handled kernel-mode exceptions, so if we get here,
-	// the page fault happened in user mode.
-
-	// Destroy the environment that caused the fault.
-	cprintf("[%08x] user fault va %08x ip %08x\n",
-		curenv->env_id, fault_va, tf->tf_eip);
-	print_trapframe(tf);
-	env_destroy(curenv);
-}
-
 static void
 trap_dispatch(struct Trapframe *tf)
 {
@@ -219,7 +200,7 @@ trap_dispatch(struct Trapframe *tf)
         // Handle spurious interrupts
 	// The hardware sometimes raises these because of noise on the
 	// IRQ line or other reasons. We don't care.
-        case IRQ_OFFSET + IRQ_SUPRIOUS:
+        case IRQ_OFFSET + IRQ_SPURIOUS:
             cprintf("Spurious interrupt on irq 7\n");
             print_trapframe(tf);
             return;
@@ -271,6 +252,7 @@ trap(struct Trapframe *tf)
 		// Acquire the big kernel lock before doing any
 		// serious kernel work.
 		// LAB 4: Your code here.
+                lock_kernel();
 		assert(curenv);
 
 		// Garbage collect if current enviroment is a zombie
@@ -304,8 +286,6 @@ trap(struct Trapframe *tf)
 		sched_yield();
 }
 
-
-<<<<<<< HEAD
 void
 page_fault_handler(struct Trapframe *tf)
 {
@@ -317,6 +297,11 @@ page_fault_handler(struct Trapframe *tf)
 	// Handle kernel-mode page faults.
 
 	// LAB 3: Your code here.
+       
+	if (tf->tf_cs == GD_KT){
+            print_trapframe(tf);
+	    panic("Page fault within kernel.");
+        }
 
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.
@@ -358,5 +343,3 @@ page_fault_handler(struct Trapframe *tf)
 	env_destroy(curenv);
 }
 
-=======
->>>>>>> lab3
