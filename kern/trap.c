@@ -336,6 +336,34 @@ page_fault_handler(struct Trapframe *tf)
 
 	// LAB 4: Your code here.
 
+        if (curenv->env_pgfault_upcall != NULL){
+            struct UTrapframe * utf = NULL;
+
+            // Check if the user environment is already running on the exception stack
+            if (tf->tf_esp >= UXSTACKTOP-PGSIZE && tf->tf_esp <= UXSTACKTOP-1){
+
+                user_mem_assert(curenv, (void *) (tf->tf_esp-sizeof(struct UTrapframe)-8), (size_t) (sizeof(struct UTrapframe) + 4), PTE_W);
+                // Recursive page fault within upcall
+                utf = (struct UTrapframe *)(tf->tf_esp - 8 - sizeof(struct UTrapframe));
+            }
+            // First entry into exception stack; don't push zero page and start at UXSTACKTOP
+            else{
+                user_mem_assert(curenv, (void *) (UXSTACKTOP-sizeof(struct UTrapframe)-4), (size_t) (sizeof(struct UTrapframe)), PTE_W);
+                utf = (struct UTrapframe *) (UXSTACKTOP - 4 - sizeof(struct UTrapframe));
+            }
+            utf->utf_fault_va = fault_va;
+            utf->utf_err = tf->tf_err;
+            utf->utf_regs = tf->tf_regs;
+            utf->utf_eip = tf->tf_eip;
+            utf->utf_eflags = tf->tf_eflags;
+            utf->utf_esp = (uintptr_t) tf->tf_esp;
+
+            tf->tf_eip = (uintptr_t) curenv->env_pgfault_upcall;
+            tf->tf_esp = (uintptr_t) (utf);
+            env_run(curenv);
+
+        }
+
 	// Destroy the environment that caused the fault.
 	cprintf("[%08x] user fault va %08x ip %08x\n",
 		curenv->env_id, fault_va, tf->tf_eip);

@@ -688,7 +688,7 @@ user_mem_check(struct Env *env, const void *va, size_t len, int perm)
         }
         
         // Loop through and check every page which is touched
-        // in the range [va, va+len].
+        // in the range [va, va+len).
         uintptr_t va_iter = ROUNDDOWN((uintptr_t) va, PGSIZE);
         pte_t * tableentry;
         for (; va_iter<(uintptr_t) va+len; va_iter+=PGSIZE){

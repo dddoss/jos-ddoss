@@ -51,6 +51,7 @@ sys_cputs(const char *s, size_t len)
         envid_t envid = curenv->env_id;
         struct Env *e;
         envid2env(envid, &e, 1);
+
         user_mem_assert(e, s, len, PTE_P | PTE_U);
 
 
@@ -165,7 +166,13 @@ static int
 sys_env_set_pgfault_upcall(envid_t envid, void *func)
 {
 	// LAB 4: Your code here.
-	panic("sys_env_set_pgfault_upcall not implemented");
+        struct Env * env = NULL;
+        envid2env(envid, &env, 1);
+        if (env == NULL) // bad envid or permissions
+            return -E_BAD_ENV;
+
+        env->env_pgfault_upcall = func;
+        return 0;
 }
 
 // Allocate a page of memory and map it at 'va' with permission
@@ -248,20 +255,26 @@ sys_page_map(envid_t srcenvid, void *srcva,
 
         if (srcenv == NULL || dstenv == NULL) // bad envid
             return -E_BAD_ENV;
-        if (!_check_va(srcva) || !_check_va(dstva))
+        if (!_check_va(srcva) || !_check_va(dstva)){
+            cprintf("sys_page_map: bad va\n");
             return -E_INVAL;
+        }
 
         pte_t * pte_store = (pte_t *)1;
         struct PageInfo *srcpage = page_lookup(srcenv->env_pgdir, srcva, &pte_store);
-        if (srcpage == NULL || (*pte_store & PTE_P) == 0) // srcva not mapped
+        if (srcpage == NULL || (*pte_store & PTE_P) == 0){ // srcva not mapped
+            cprintf("sys_page_map: source virtual address not mapped\n");
             return -E_INVAL;
+        }
 
         int required_flags = PTE_U | PTE_P;
         int allowed_flags = required_flags | PTE_AVAIL;
         if (*pte_store & PTE_W)
             allowed_flags |= PTE_W;
-        if (!(_check_flags(required_flags, allowed_flags, perm)))
+        if (!(_check_flags(required_flags, allowed_flags, perm))){
+            cprintf("sys_page_map: bad flags\n");
             return -E_INVAL;
+        }
 
         if (page_insert(dstenv->env_pgdir, srcpage, dstva, perm)<0)
             return -E_NO_MEM;
