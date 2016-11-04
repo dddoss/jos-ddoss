@@ -260,18 +260,15 @@ sys_page_map(envid_t srcenvid, void *srcva,
         envid2env(dstenvid, &dstenv, strict_env_perms);
 
         if (srcenv == NULL || dstenv == NULL){ // bad envid
-            cprintf("sys_page_map: bad envs\n");
             return -E_BAD_ENV;
         }
         if (!_check_va(srcva) || !_check_va(dstva)){
-            cprintf("sys_page_map: bad va\n");
             return -E_INVAL;
         }
 
         pte_t * pte_store = (pte_t *)1;
         struct PageInfo *srcpage = page_lookup(srcenv->env_pgdir, srcva, &pte_store);
         if (srcpage == NULL || (*pte_store & PTE_P) == 0){ // srcva not mapped
-            cprintf("sys_page_map: bad src page\n");
             return -E_INVAL;
         }
 
@@ -280,12 +277,10 @@ sys_page_map(envid_t srcenvid, void *srcva,
         if (*pte_store & PTE_W)
             allowed_flags |= PTE_W;
         if (!(_check_flags(required_flags, allowed_flags, perm))){
-            cprintf("sys_page_map: bad flags\n");
             return -E_INVAL;
         }
 
         if (page_insert(dstenv->env_pgdir, srcpage, dstva, perm)<0){
-            cprintf("sys_page_map: no mem\n");
             return -E_NO_MEM;
         }
 
@@ -361,7 +356,6 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
         struct Env * env = NULL;
         envid2env(envid, &env, 0);
         if (env == NULL){ // bad envid
-            cprintf("ipc_try_send: Bad Env\n");
             return -E_BAD_ENV;
         }
         if (!(env->env_ipc_recving)){
@@ -371,7 +365,6 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
         if ((uint32_t)srcva < UTOP && (uint32_t)env->env_ipc_dstva < UTOP){
             int r;
             if ((r = sys_page_map(sys_getenvid(), srcva, envid, env->env_ipc_dstva, perm, 0)) < 0){
-                cprintf("sys_ipc_try_send: error %e\n", r);
                 return r;
             }
             env->env_ipc_perm = perm;
@@ -382,6 +375,7 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
         env->env_ipc_from = sys_getenvid();
         env->env_ipc_value = value;
         env->env_ipc_recving = 0;
+        env->env_tf.tf_regs.reg_eax = 0; // Fake 0 return value
         env->env_status = ENV_RUNNABLE;
         return 0;
 }
@@ -410,7 +404,6 @@ sys_ipc_recv(void *dstva)
 
     curenv->env_ipc_recving = 1;
     curenv->env_status = ENV_NOT_RUNNABLE;
-    curenv->env_tf.tf_regs.reg_eax = 0;
     sys_yield(); // Does not return
     return 0;
 }

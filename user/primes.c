@@ -29,7 +29,7 @@ top:
 
 	// filter out multiples of our prime
 	while (1) {
-                i = ipc_recv(&envid, 0, 0);
+		i = ipc_recv(&envid, 0, 0);
 		if (i % p)
 			ipc_send(id, i, 0, 0);
 	}
