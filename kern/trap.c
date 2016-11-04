@@ -72,12 +72,15 @@ trap_init(void)
 {
 	extern struct Segdesc gdt[];
         extern void* vectors[];
+        int i;
 
 	// LAB 3: Your code here.
-        for (int i = 0; i <= 48; i++)
+        for (i = 0; i <= 19; i++)
+            SETGATE(idt[i], 0, GD_KT, vectors[i], 0);
+        for (; i<=48; i++)
             SETGATE(idt[i], 0, GD_KT, vectors[i], 0);
         SETGATE(idt[T_BRKPT], 0, GD_KT, vectors[T_BRKPT], 3); // T_BRKPT, callable by user
-        SETGATE(idt[T_SYSCALL], 1, GD_KT, vectors[T_SYSCALL], 3); //T_SYSCALL
+        SETGATE(idt[T_SYSCALL], 0, GD_KT, vectors[T_SYSCALL], 3); //T_SYSCALL
 
 	// Per-CPU setup 
 	trap_init_percpu();
@@ -197,6 +200,14 @@ trap_dispatch(struct Trapframe *tf)
                     tf->tf_regs.reg_edi, tf->tf_regs.reg_esi);
             return; // Will be reached
 
+        // Handle clock interrupts. Don't forget to acknowledge the
+        // interrupt using lapic_eoi() before calling the scheduler!
+        // LAB 4: Your code here.
+        case IRQ_OFFSET + IRQ_TIMER:
+            lapic_eoi();
+            sched_yield();
+            return; // Never reached
+            
         // Handle spurious interrupts
 	// The hardware sometimes raises these because of noise on the
 	// IRQ line or other reasons. We don't care.
@@ -204,13 +215,6 @@ trap_dispatch(struct Trapframe *tf)
             cprintf("Spurious interrupt on irq 7\n");
             print_trapframe(tf);
             return;
-
-        // Handle clock interrupts. Don't forget to acknowledge the
-        // interrupt using lapic_eoi() before calling the scheduler!
-        // LAB 4: Your code here.
-
-        //case IRQ_OFFSET +...
-
 
         default:
             break;
