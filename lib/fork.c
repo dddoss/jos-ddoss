@@ -154,7 +154,6 @@ fork(void)
         if ((r = sys_env_set_status(envid, ENV_RUNNABLE)) < 0)
             panic("sys_env_set_status: %e", r);
                 
-
         return envid;
 }
 

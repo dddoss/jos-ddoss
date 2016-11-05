@@ -340,7 +340,9 @@ sys_page_unmap(envid_t envid, void *va)
 //	-E_BAD_ENV if environment envid doesn't currently exist.
 //		(No need to check permissions.)
 //	-E_IPC_NOT_RECV if envid is not currently blocked in sys_ipc_recv,
-//		or another environment managed to send first.
+//		or another environment managed to send first,
+//		or the receiving environment is selectively receiving from
+//		another environment.
 //	-E_INVAL if srcva < UTOP but srcva is not page-aligned.
 //	-E_INVAL if srcva < UTOP and perm is inappropriate
 //		(see sys_page_alloc).
@@ -358,7 +360,8 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
         if (env == NULL){ // bad envid
             return -E_BAD_ENV;
         }
-        if (!(env->env_ipc_recving)){
+        if (!(env->env_ipc_recving) || (env->env_ipc_from_req >= 0 && env->env_ipc_from_req != sys_getenvid())){
+            //cprintf("failed to send: %d, %d, %d\n", env->env_ipc_recving, env->env_ipc_from_req, sys_getenvid());
             return -E_IPC_NOT_RECV;
         }
 
@@ -387,12 +390,16 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 // If 'dstva' is < UTOP, then you are willing to receive a page of data.
 // 'dstva' is the virtual address at which the sent page should be mapped.
 //
+// If 'from_env' is >=0, then you are only willing to receive a value from
+// the specified environment. Otherwise, values can be received from any
+// environment.
+//
 // This function only returns on error, but the system call will eventually
 // return 0 on success.
 // Return < 0 on error.  Errors are:
 //	-E_INVAL if dstva < UTOP but dstva is not page-aligned.
 static int
-sys_ipc_recv(void *dstva)
+sys_ipc_recv(void *dstva, envid_t from_env)
 {
     curenv->env_ipc_dstva = (void *)UTOP;
     if ((uint32_t)dstva < UTOP){
@@ -403,6 +410,7 @@ sys_ipc_recv(void *dstva)
     }
 
     curenv->env_ipc_recving = 1;
+    curenv->env_ipc_from_req = from_env;
     curenv->env_status = ENV_NOT_RUNNABLE;
     sys_yield(); // Does not return
     return 0;
@@ -445,7 +453,7 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
         case SYS_ipc_try_send:
             return sys_ipc_try_send((envid_t) a1, (uint32_t) a2, (void *) a3, (unsigned) a4);
         case SYS_ipc_recv:
-            return sys_ipc_recv((void *) a1);
+            return sys_ipc_recv((void *) a1, (envid_t) a2);
         default:
             return -E_INVAL;
 	}
