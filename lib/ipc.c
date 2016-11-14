@@ -2,6 +2,34 @@
 
 #include <inc/lib.h>
 
+
+// Same footprint as ipc_recv, with one caveat:
+// If from_env >= 0, causes sys_ipc_recv to selectively receive 
+// from a specified envid, blocking on all other attempted sends
+int32_t
+ipc_recv_select(envid_t from_env, envid_t *from_env_store, void *pg, int *perm_store){
+	// LAB 4: Your code here.
+        int r;
+        if (pg == NULL)
+            pg = (void *)UTOP;
+        if ((r = sys_ipc_recv(pg, from_env)) < 0){
+            // Error in sys_ipc_recv
+            if (from_env_store != NULL)
+                *from_env_store = 0;
+            if (perm_store != NULL)
+                *perm_store = 0;
+            return r;
+        }
+        else{
+            if (from_env_store != NULL)
+                *from_env_store = thisenv->env_ipc_from;
+            if (perm_store != NULL)
+                *perm_store = thisenv->env_ipc_perm;
+            return thisenv->env_ipc_value;
+        }
+        return -1; // Not reached
+}
+
 // Receive a value via IPC and return it.
 // If 'pg' is nonnull, then any page sent by the sender will be mapped at
 //	that address.
@@ -22,9 +50,7 @@
 int32_t
 ipc_recv(envid_t *from_env_store, void *pg, int *perm_store)
 {
-	// LAB 4: Your code here.
-	panic("ipc_recv not implemented");
-	return 0;
+    return ipc_recv_select(-1, from_env_store, pg, perm_store);
 }
 
 // Send 'val' (and 'pg' with 'perm', if 'pg' is nonnull) to 'toenv'.
@@ -38,8 +64,22 @@ ipc_recv(envid_t *from_env_store, void *pg, int *perm_store)
 void
 ipc_send(envid_t to_env, uint32_t val, void *pg, int perm)
 {
-	// LAB 4: Your code here.
-	panic("ipc_send not implemented");
+    int r;
+    if (pg == NULL)
+        pg = (void *)UTOP; // Above user mappable region
+
+    while(true){
+        if ((r = sys_ipc_try_send(to_env, val, pg, perm)) < 0){
+            if (r == -E_IPC_NOT_RECV){
+                sys_yield();
+                continue;
+            }
+            else
+                panic("Error in ipc_send: %e", r);
+        }
+        else
+            return;
+    }
 }
 
 // Find the first environment of the given type.  We'll use this to
