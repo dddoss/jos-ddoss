@@ -1,0 +1,2 @@
+1. No, you don't need do do anything else to ensure this setting is saved, because eflags are saved and restored using popfl and pushfl when we switch environments.
+2. 

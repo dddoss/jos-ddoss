@@ -76,8 +76,9 @@ duppage(envid_t envid, unsigned pn)
         pde_t pde = *(pde_t *)(UVPT | UVPT >> 10 | ptx);
         pte_t pte = *(pte_t *)(UVPT | (pdx) << 12 | ptx*4);
 
-        int flags = pte & (PTE_W | PTE_U | PTE_P | PTE_COW);
-        if ((flags & PTE_W) || (flags & PTE_COW)){
+        int flags = pte & (PTE_SYSCALL | PTE_COW | PTE_SHARE);
+        // Copy writeable pages as copy-on-write, unless they're flagged as PTE_SHARE (those we just copy straight)
+        if (!(flags & PTE_SHARE) && ((flags & PTE_W) || (flags & PTE_COW))){
             flags |= PTE_COW;
             flags &= ~PTE_W;
         }
