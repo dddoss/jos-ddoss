@@ -1,0 +1,857 @@
+diff --git a/challenge-lab5.patch b/challenge-lab5.patch
+index 9883439..e69de29 100644
+--- a/challenge-lab5.patch
++++ b/challenge-lab5.patch
+@@ -1,220 +0,0 @@
+-diff --git a/inc/fd.h b/inc/fd.h
+-index 444b583..9857b23 100644
+---- a/inc/fd.h
+-+++ b/inc/fd.h
+-@@ -50,6 +50,15 @@ int	fd_alloc(struct Fd **fd_store);
+- int	fd_close(struct Fd *fd, bool must_exist);
+- int	fd_lookup(int fdnum, struct Fd **fd_store);
+- int	dev_lookup(int devid, struct Dev **dev_store);
+-+int	close(int fd);
+-+ssize_t	read(int fd, void *buf, size_t nbytes);
+-+ssize_t	write(int fd, const void *buf, size_t nbytes);
+-+int	seek(int fd, off_t offset);
+-+void	close_all(void);
+-+ssize_t	readn(int fd, void *buf, size_t nbytes);
+-+int	dup(int oldfd, int newfd);
+-+int	fstat(int fd, struct Stat *statbuf);
+-+int	stat(const char *path, struct Stat *statbuf);
+- 
+- extern struct Dev devfile;
+- extern struct Dev devcons;
+-diff --git a/inc/lib.h b/inc/lib.h
+-index 15d717b..be374b6 100644
+---- a/inc/lib.h
+-+++ b/inc/lib.h
+-@@ -3,7 +3,6 @@
+- // This library is roughly our OS's version of a standard C library,
+- // and is intended to be linked into all user-mode applications
+- // (NOT the kernel or boot loader).
+--
+- #ifndef JOS_INC_LIB_H
+- #define JOS_INC_LIB_H 1
+- 
+-@@ -20,6 +19,8 @@
+- #include <inc/fs.h>
+- #include <inc/fd.h>
+- #include <inc/args.h>
+-+#include <inc/file.h>
+-+#include <inc/elf.h>
+- 
+- #define USED(x)		(void)(x)
+- 
+-@@ -57,6 +58,7 @@ int	sys_page_map(envid_t src_env, void *src_pg,
+- int	sys_page_unmap(envid_t env, void *pg);
+- int	sys_ipc_try_send(envid_t to_env, uint32_t value, void *pg, int perm);
+- int	sys_ipc_recv(void *rcv_pg, envid_t from_env);
+-+int    sys_exec(void *newstack, struct Trapframe *new_tf, const char *prog);
+- 
+- // This must be inlined.  Exercise for reader: why?
+- static inline envid_t __attribute__((always_inline))
+-@@ -76,27 +78,9 @@ int32_t ipc_recv_select(envid_t from_env, envid_t *from_env_store, void *pg, int
+- envid_t	ipc_find_env(enum EnvType type);
+- 
+- // fork.c
+--#define	PTE_SHARE	0x400
+- envid_t	fork(void);
+- envid_t	sfork(void);	// Challenge!
+- 
+--// fd.c
+--int	close(int fd);
+--ssize_t	read(int fd, void *buf, size_t nbytes);
+--ssize_t	write(int fd, const void *buf, size_t nbytes);
+--int	seek(int fd, off_t offset);
+--void	close_all(void);
+--ssize_t	readn(int fd, void *buf, size_t nbytes);
+--int	dup(int oldfd, int newfd);
+--int	fstat(int fd, struct Stat *statbuf);
+--int	stat(const char *path, struct Stat *statbuf);
+--
+--// file.c
+--int	open(const char *path, int mode);
+--int	ftruncate(int fd, off_t size);
+--int	remove(const char *path);
+--int	sync(void);
+--
+- // pageref.c
+- int	pageref(void *addr);
+- 
+-@@ -105,6 +89,10 @@ int	pageref(void *addr);
+- envid_t	spawn(const char *program, const char **argv);
+- envid_t	spawnl(const char *program, const char *arg0, ...);
+- 
+-+// exec.c
+-+int exec(const char *program, const char **argv);
+-+int execl(const char *program, const char *arg0, ...);
+-+
+- // console.c
+- void	cputchar(int c);
+- int	getchar(void);
+-@@ -118,15 +106,5 @@ int	pipeisclosed(int pipefd);
+- // wait.c
+- void	wait(envid_t env);
+- 
+--/* File open modes */
+--#define	O_RDONLY	0x0000		/* open for reading only */
+--#define	O_WRONLY	0x0001		/* open for writing only */
+--#define	O_RDWR		0x0002		/* open for reading and writing */
+--#define	O_ACCMODE	0x0003		/* mask for above modes */
+--
+--#define	O_CREAT		0x0100		/* create if nonexistent */
+--#define	O_TRUNC		0x0200		/* truncate to zero length */
+--#define	O_EXCL		0x0400		/* error if already exists */
+--#define O_MKDIR		0x0800		/* create directory, not regular file */
+- 
+- #endif	// !JOS_INC_LIB_H
+-diff --git a/inc/mmu.h b/inc/mmu.h
+-index 093c8a6..d28e9e5 100644
+---- a/inc/mmu.h
+-+++ b/inc/mmu.h
+-@@ -69,6 +69,8 @@
+- // hardware, so user processes are allowed to set them arbitrarily.
+- #define PTE_AVAIL	0xE00	// Available for software use
+- 
+-+// Used in fork.c, sysexec.c
+-+#define	PTE_SHARE	0x400
+- // Flags in PTE_SYSCALL may be used in system calls.  (Others may not.)
+- #define PTE_SYSCALL	(PTE_AVAIL | PTE_P | PTE_W | PTE_U)
+- 
+-diff --git a/inc/syscall.h b/inc/syscall.h
+-index 20c6433..9c63eed 100644
+---- a/inc/syscall.h
+-+++ b/inc/syscall.h
+-@@ -17,6 +17,7 @@ enum {
+- 	SYS_yield,
+- 	SYS_ipc_try_send,
+- 	SYS_ipc_recv,
+-+        SYS_exec,
+- 	NSYSCALLS
+- };
+- 
+-diff --git a/kern/Makefrag b/kern/Makefrag
+-index 4bf2a98..050b96f 100644
+---- a/kern/Makefrag
+-+++ b/kern/Makefrag
+-@@ -27,10 +27,13 @@ KERN_SRCFILES :=	kern/entry.S \
+- 			kern/trapentry.S \
+- 			kern/sched.c \
+- 			kern/syscall.c \
+-+                        kern/sysexec.c \
+- 			kern/kdebug.c \
+- 			lib/printfmt.c \
+- 			lib/readline.c \
+--			lib/string.c
+-+			lib/string.c \
+-+                        lib/file.c \
+-+                        lib/fd.c
+- 
+- # Source files for LAB4
+- KERN_SRCFILES +=	kern/mpentry.S \
+-@@ -94,7 +97,8 @@ KERN_BINFILES +=	user/testpteshare \
+- 			user/testpiperace2 \
+- 			user/primespipe \
+- 			user/testkbd \
+--			user/testshell
+-+			user/testshell \
+-+                        user/exechello
+- 
+- KERN_OBJFILES := $(patsubst %.c, $(OBJDIR)/%.o, $(KERN_SRCFILES))
+- KERN_OBJFILES := $(patsubst %.S, $(OBJDIR)/%.o, $(KERN_OBJFILES))
+-diff --git a/kern/init.c b/kern/init.c
+-index a89d5f1..8981d28 100644
+---- a/kern/init.c
+-+++ b/kern/init.c
+-@@ -63,7 +63,7 @@ i386_init(void)
+- 	ENV_CREATE(TEST, ENV_TYPE_USER);
+- #else
+- 	// Touch all you want.
+--	ENV_CREATE(user_icode, ENV_TYPE_USER);
+-+	//ENV_CREATE(user_icode, ENV_TYPE_USER);
+- #endif // TEST*
+- 
+- 	// Should not be necessary - drains keyboard because interrupt has given up.
+-diff --git a/kern/syscall.c b/kern/syscall.c
+-index c84c1a3..a5b40e0 100644
+---- a/kern/syscall.c
+-+++ b/kern/syscall.c
+-@@ -9,6 +9,7 @@
+- #include <kern/pmap.h>
+- #include <kern/trap.h>
+- #include <kern/syscall.h>
+-+#include <kern/sysexec.h>
+- #include <kern/console.h>
+- #include <kern/sched.h>
+- 
+-@@ -480,6 +481,9 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
+-             return sys_ipc_recv((void *) a1, (envid_t) a2);
+-         case SYS_env_set_trapframe:
+-             return sys_env_set_trapframe((envid_t) a1, (struct Trapframe *) a2);
+-+        case SYS_exec:
+-+            sys_exec((void *) a1, (struct Trapframe *) a2, (char *)a3); // Does not return
+-+            return -1;
+-         default:
+-             return -E_INVAL;
+- 	}
+-diff --git a/lib/Makefrag b/lib/Makefrag
+-index 514e4a7..78d1c31 100644
+---- a/lib/Makefrag
+-+++ b/lib/Makefrag
+-@@ -22,7 +22,8 @@ LIB_SRCFILES :=		$(LIB_SRCFILES) \
+- 			lib/file.c \
+- 			lib/fprintf.c \
+- 			lib/pageref.c \
+--			lib/spawn.c
+-+			lib/spawn.c \
+-+                        lib/exec.c
+- 
+- LIB_SRCFILES :=		$(LIB_SRCFILES) \
+- 			lib/pipe.c \
+-diff --git a/lib/syscall.c b/lib/syscall.c
+-index 22f467a..2a395b2 100644
+---- a/lib/syscall.c
+-+++ b/lib/syscall.c
+-@@ -117,3 +117,8 @@ sys_ipc_recv(void *dstva, envid_t from_env)
+- 	return syscall(SYS_ipc_recv, 1, (uint32_t)dstva, from_env, 0, 0, 0);
+- }
+- 
+-+int
+-+sys_exec(void *newstack, struct Trapframe *newtf, const char *prog){
+-+        return syscall(SYS_exec, 0, (uint32_t) newstack, (uint32_t) newtf, (uint32_t) prog, 0, 0);
+-+}
+-+
+diff --git a/inc/fd.h b/inc/fd.h
+index 444b583..9857b23 100644
+--- a/inc/fd.h
++++ b/inc/fd.h
+@@ -50,6 +50,15 @@ int	fd_alloc(struct Fd **fd_store);
+ int	fd_close(struct Fd *fd, bool must_exist);
+ int	fd_lookup(int fdnum, struct Fd **fd_store);
+ int	dev_lookup(int devid, struct Dev **dev_store);
++int	close(int fd);
++ssize_t	read(int fd, void *buf, size_t nbytes);
++ssize_t	write(int fd, const void *buf, size_t nbytes);
++int	seek(int fd, off_t offset);
++void	close_all(void);
++ssize_t	readn(int fd, void *buf, size_t nbytes);
++int	dup(int oldfd, int newfd);
++int	fstat(int fd, struct Stat *statbuf);
++int	stat(const char *path, struct Stat *statbuf);
+ 
+ extern struct Dev devfile;
+ extern struct Dev devcons;
+diff --git a/inc/file.h b/inc/file.h
+index e69de29..b19145c 100644
+--- a/inc/file.h
++++ b/inc/file.h
+@@ -0,0 +1,20 @@
++#ifndef JOS_INC_FILE_H
++#define JOS_INC_FILE_H
++
++int	open(const char *path, int mode);
++int	ftruncate(int fd, off_t size);
++int	remove(const char *path);
++int	sync(void);
++
++/* File open modes */
++#define	O_RDONLY	0x0000		/* open for reading only */
++#define	O_WRONLY	0x0001		/* open for writing only */
++#define	O_RDWR		0x0002		/* open for reading and writing */
++#define	O_ACCMODE	0x0003		/* mask for above modes */
++
++#define	O_CREAT		0x0100		/* create if nonexistent */
++#define	O_TRUNC		0x0200		/* truncate to zero length */
++#define	O_EXCL		0x0400		/* error if already exists */
++#define O_MKDIR		0x0800		/* create directory, not regular file */
++
++#endif	// not JOS_INC_FD_H
+diff --git a/inc/lib.h b/inc/lib.h
+index 15d717b..be374b6 100644
+--- a/inc/lib.h
++++ b/inc/lib.h
+@@ -3,7 +3,6 @@
+ // This library is roughly our OS's version of a standard C library,
+ // and is intended to be linked into all user-mode applications
+ // (NOT the kernel or boot loader).
+-
+ #ifndef JOS_INC_LIB_H
+ #define JOS_INC_LIB_H 1
+ 
+@@ -20,6 +19,8 @@
+ #include <inc/fs.h>
+ #include <inc/fd.h>
+ #include <inc/args.h>
++#include <inc/file.h>
++#include <inc/elf.h>
+ 
+ #define USED(x)		(void)(x)
+ 
+@@ -57,6 +58,7 @@ int	sys_page_map(envid_t src_env, void *src_pg,
+ int	sys_page_unmap(envid_t env, void *pg);
+ int	sys_ipc_try_send(envid_t to_env, uint32_t value, void *pg, int perm);
+ int	sys_ipc_recv(void *rcv_pg, envid_t from_env);
++int    sys_exec(void *newstack, struct Trapframe *new_tf, const char *prog);
+ 
+ // This must be inlined.  Exercise for reader: why?
+ static inline envid_t __attribute__((always_inline))
+@@ -76,27 +78,9 @@ int32_t ipc_recv_select(envid_t from_env, envid_t *from_env_store, void *pg, int
+ envid_t	ipc_find_env(enum EnvType type);
+ 
+ // fork.c
+-#define	PTE_SHARE	0x400
+ envid_t	fork(void);
+ envid_t	sfork(void);	// Challenge!
+ 
+-// fd.c
+-int	close(int fd);
+-ssize_t	read(int fd, void *buf, size_t nbytes);
+-ssize_t	write(int fd, const void *buf, size_t nbytes);
+-int	seek(int fd, off_t offset);
+-void	close_all(void);
+-ssize_t	readn(int fd, void *buf, size_t nbytes);
+-int	dup(int oldfd, int newfd);
+-int	fstat(int fd, struct Stat *statbuf);
+-int	stat(const char *path, struct Stat *statbuf);
+-
+-// file.c
+-int	open(const char *path, int mode);
+-int	ftruncate(int fd, off_t size);
+-int	remove(const char *path);
+-int	sync(void);
+-
+ // pageref.c
+ int	pageref(void *addr);
+ 
+@@ -105,6 +89,10 @@ int	pageref(void *addr);
+ envid_t	spawn(const char *program, const char **argv);
+ envid_t	spawnl(const char *program, const char *arg0, ...);
+ 
++// exec.c
++int exec(const char *program, const char **argv);
++int execl(const char *program, const char *arg0, ...);
++
+ // console.c
+ void	cputchar(int c);
+ int	getchar(void);
+@@ -118,15 +106,5 @@ int	pipeisclosed(int pipefd);
+ // wait.c
+ void	wait(envid_t env);
+ 
+-/* File open modes */
+-#define	O_RDONLY	0x0000		/* open for reading only */
+-#define	O_WRONLY	0x0001		/* open for writing only */
+-#define	O_RDWR		0x0002		/* open for reading and writing */
+-#define	O_ACCMODE	0x0003		/* mask for above modes */
+-
+-#define	O_CREAT		0x0100		/* create if nonexistent */
+-#define	O_TRUNC		0x0200		/* truncate to zero length */
+-#define	O_EXCL		0x0400		/* error if already exists */
+-#define O_MKDIR		0x0800		/* create directory, not regular file */
+ 
+ #endif	// !JOS_INC_LIB_H
+diff --git a/inc/mmu.h b/inc/mmu.h
+index 093c8a6..d28e9e5 100644
+--- a/inc/mmu.h
++++ b/inc/mmu.h
+@@ -69,6 +69,8 @@
+ // hardware, so user processes are allowed to set them arbitrarily.
+ #define PTE_AVAIL	0xE00	// Available for software use
+ 
++// Used in fork.c, sysexec.c
++#define	PTE_SHARE	0x400
+ // Flags in PTE_SYSCALL may be used in system calls.  (Others may not.)
+ #define PTE_SYSCALL	(PTE_AVAIL | PTE_P | PTE_W | PTE_U)
+ 
+diff --git a/inc/syscall.h b/inc/syscall.h
+index 20c6433..9c63eed 100644
+--- a/inc/syscall.h
++++ b/inc/syscall.h
+@@ -17,6 +17,7 @@ enum {
+ 	SYS_yield,
+ 	SYS_ipc_try_send,
+ 	SYS_ipc_recv,
++        SYS_exec,
+ 	NSYSCALLS
+ };
+ 
+diff --git a/kern/Makefrag b/kern/Makefrag
+index 4bf2a98..050b96f 100644
+--- a/kern/Makefrag
++++ b/kern/Makefrag
+@@ -27,10 +27,13 @@ KERN_SRCFILES :=	kern/entry.S \
+ 			kern/trapentry.S \
+ 			kern/sched.c \
+ 			kern/syscall.c \
++                        kern/sysexec.c \
+ 			kern/kdebug.c \
+ 			lib/printfmt.c \
+ 			lib/readline.c \
+-			lib/string.c
++			lib/string.c \
++                        lib/file.c \
++                        lib/fd.c
+ 
+ # Source files for LAB4
+ KERN_SRCFILES +=	kern/mpentry.S \
+@@ -94,7 +97,8 @@ KERN_BINFILES +=	user/testpteshare \
+ 			user/testpiperace2 \
+ 			user/primespipe \
+ 			user/testkbd \
+-			user/testshell
++			user/testshell \
++                        user/exechello
+ 
+ KERN_OBJFILES := $(patsubst %.c, $(OBJDIR)/%.o, $(KERN_SRCFILES))
+ KERN_OBJFILES := $(patsubst %.S, $(OBJDIR)/%.o, $(KERN_OBJFILES))
+diff --git a/kern/init.c b/kern/init.c
+index a89d5f1..8981d28 100644
+--- a/kern/init.c
++++ b/kern/init.c
+@@ -63,7 +63,7 @@ i386_init(void)
+ 	ENV_CREATE(TEST, ENV_TYPE_USER);
+ #else
+ 	// Touch all you want.
+-	ENV_CREATE(user_icode, ENV_TYPE_USER);
++	//ENV_CREATE(user_icode, ENV_TYPE_USER);
+ #endif // TEST*
+ 
+ 	// Should not be necessary - drains keyboard because interrupt has given up.
+diff --git a/kern/syscall.c b/kern/syscall.c
+index c84c1a3..a5b40e0 100644
+--- a/kern/syscall.c
++++ b/kern/syscall.c
+@@ -9,6 +9,7 @@
+ #include <kern/pmap.h>
+ #include <kern/trap.h>
+ #include <kern/syscall.h>
++#include <kern/sysexec.h>
+ #include <kern/console.h>
+ #include <kern/sched.h>
+ 
+@@ -480,6 +481,9 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
+             return sys_ipc_recv((void *) a1, (envid_t) a2);
+         case SYS_env_set_trapframe:
+             return sys_env_set_trapframe((envid_t) a1, (struct Trapframe *) a2);
++        case SYS_exec:
++            sys_exec((void *) a1, (struct Trapframe *) a2, (char *)a3); // Does not return
++            return -1;
+         default:
+             return -E_INVAL;
+ 	}
+diff --git a/kern/sysexec.c b/kern/sysexec.c
+index e69de29..62a0f9a 100644
+--- a/kern/sysexec.c
++++ b/kern/sysexec.c
+@@ -0,0 +1,137 @@
++/* See COPYRIGHT for copyright information. */
++
++#include <inc/x86.h>
++#include <inc/error.h>
++#include <inc/string.h>
++#include <inc/assert.h>
++#include <inc/env.h>
++#include <inc/fd.h>
++#include <inc/file.h>
++#include <inc/mmu.h>
++#include <inc/syscall.h>
++
++#include <kern/trap.h>
++#include <kern/syscall.h>
++#include <kern/sysexec.h>
++#include <kern/console.h>
++#include <kern/sched.h>
++
++static int _map_segment(envid_t envid, uintptr_t va, size_t memsz,
++                       int fd, size_t filesz, off_t fileoffset, int perm);
++static int _clear_upages(envid_t envid);
++
++int
++sys_exec(void *newstack, struct Trapframe *newtf, char *prog){
++
++	int fd, i, r;
++	struct Elf *elf;
++        unsigned char elf_buf[512];
++	struct Proghdr *ph;
++	int perm;
++	envid_t curid = syscall(SYS_getenvid, 0, 0, 0, 0, 0);
++
++        if ((r = open(prog, O_RDONLY)) < 0)
++                return r;
++        fd = r;
++        
++        syscall(SYS_page_map, curid, (uint32_t)newstack, curid, USTACKTOP-PGSIZE, PTE_P | PTE_U | PTE_W);
++        syscall(SYS_page_unmap, curid, (uint32_t)newstack, 0, 0, 0);
++
++        // Read elf header
++        elf = (struct Elf*) elf_buf;
++        if (readn(fd, elf_buf, sizeof(elf_buf)) != sizeof(elf_buf)
++            || elf->e_magic != ELF_MAGIC) {
++                cprintf("elf magic %08x want %08x\n", elf->e_magic, ELF_MAGIC);
++                panic("bad elf header");
++        }
++
++        cprintf("read elf header\n");
++        newtf->tf_eip = elf->e_entry;
++	if ((r = syscall(SYS_env_set_trapframe, curid, (uint32_t)newtf, 0, 0, 0)) < 0)
++            panic("sys_env_set_trapframe: %e", r);
++	_clear_upages(curid);
++
++        // Set up program segments as defined in ELF header.
++        ph = (struct Proghdr*) (elf_buf + elf->e_phoff);
++        for (i = 0; i < elf->e_phnum; i++, ph++) {
++                if (ph->p_type != ELF_PROG_LOAD)
++                        continue;
++                perm = PTE_P | PTE_U;
++                if (ph->p_flags & ELF_PROG_FLAG_WRITE)
++                        perm |= PTE_W;
++                if ((r = _map_segment(curid, ph->p_va, ph->p_memsz,
++                                     fd, ph->p_filesz, ph->p_offset, perm)) < 0)
++                        panic("map_segment: %e", r);
++        }
++        close(fd);
++        fd = -1;
++        syscall(SYS_yield, 0, 0, 0, 0, 0);
++        return -1;
++
++}
++
++static int 
++_map_segment(envid_t envid, uintptr_t va, size_t memsz,
++        int fd, size_t filesz, off_t fileoffset, int perm)
++{
++        int i, r;
++        void *blk;
++
++        cprintf("map_segment %x+%x\n", va, memsz);
++
++        if ((i = PGOFF(va))) {
++                va -= i;
++                memsz += i;
++                filesz += i;
++                fileoffset -= i;
++        }
++        cprintf("  starting loop\n");
++
++        for (i = 0; i < memsz; i += PGSIZE) {
++                cprintf("  allocing page 0x%x... ", va+i); 
++                if ((r = syscall(SYS_page_alloc, envid, (va + i), perm, 0, 0)) < 0)
++                        return r;
++                cprintf("done\n");
++                if (i > filesz) {
++                        cprintf("  seeking\n");
++                        // from file
++                        if ((r = seek(fd, fileoffset + i)) < 0)
++                                return r;
++                        cprintf("  readn\n");
++                        if ((r = readn(fd, (void*) (va + i), MIN(PGSIZE, filesz-i))) < 0)
++                                return r;
++                }   
++        }
++        return 0;
++}
++
++static int 
++_clear_upages(envid_t envid)
++{
++        pde_t pde;
++        pte_t pte;
++        int pdi, pti;
++        int r;
++        uint32_t addr;
++
++        for (pdi = 0; pdi <= (int)PDX(UXSTACKTOP-PGSIZE-1); pdi++) {
++            pde = *(pde_t *)(UVPT | UVPT >> 10 | pdi*4);
++            if (!(pde & PTE_P) || !(pde & PTE_U))
++                continue;
++
++            for (pti = 0; pti < NPTENTRIES; pti++) {
++                pte = *(pte_t *)(UVPT | pdi << 12 | pti*4);
++
++                if ((pte & PTE_P) && (pte & PTE_U) && !(pte & PTE_SHARE)){
++                    addr = ((pdi*NPTENTRIES+pti)*PGSIZE);
++		    if ((r = syscall(SYS_page_unmap, envid, addr, 0, 0, 0)) < 0)
++			return r;
++                }
++            }
++        }
++
++        return 0;
++}
++
++
++
+diff --git a/kern/sysexec.h b/kern/sysexec.h
+index e69de29..8ba9fec 100644
+--- a/kern/sysexec.h
++++ b/kern/sysexec.h
+@@ -0,0 +1,11 @@
++#ifndef JOS_KERN_SYSEXEC_H
++#define JOS_KERN_SYSEXEC_H
++#ifndef JOS_KERNEL
++# error "This is a JOS kernel header; user programs should not #include it"
++#endif
++
++#include <inc/elf.h>
++
++int sys_exec(void *newstack, struct Trapframe *newtf, char *prog);
++
++#endif /* !JOS_KERN_SYSEXEC_H */
+diff --git a/lib/Makefrag b/lib/Makefrag
+index 514e4a7..78d1c31 100644
+--- a/lib/Makefrag
++++ b/lib/Makefrag
+@@ -22,7 +22,8 @@ LIB_SRCFILES :=		$(LIB_SRCFILES) \
+ 			lib/file.c \
+ 			lib/fprintf.c \
+ 			lib/pageref.c \
+-			lib/spawn.c
++			lib/spawn.c \
++                        lib/exec.c
+ 
+ LIB_SRCFILES :=		$(LIB_SRCFILES) \
+ 			lib/pipe.c \
+diff --git a/lib/exec.c b/lib/exec.c
+index e69de29..ec48319 100644
+--- a/lib/exec.c
++++ b/lib/exec.c
+@@ -0,0 +1,209 @@
++#include <inc/lib.h>
++#include <inc/elf.h>
++
++#define UTEMPNEWSTACK		(UTEMP + PGSIZE)
++#define UTEMP2USTACK(addr)	((void*) (addr) + (USTACKTOP - PGSIZE) - UTEMPNEWSTACK)
++#define PTE_KEEP                0x200         
++
++// Helper functions for exec.
++static int init_stack(const char **argv, uintptr_t *init_esp);
++
++// Change the current process to execute a program image loaded from the file system.
++// prog: the pathname of the program to run.
++// argv: pointer to null-terminated array of pointers to strings,
++// 	 which will be passed to the child as its command-line arguments.
++// Will not return on success; returns < 0 on failure.
++int
++exec(const char *prog, const char **argv)
++{
++        cprintf("in exec\n");
++	unsigned char elf_buf[512];
++	struct Trapframe new_tf;
++
++	int i, r;
++	struct Elf *elf;
++	struct Proghdr *ph;
++	int perm;
++
++	// This code follows this procedure:
++	//
++	//   - Open the program file.
++	//
++	//   - Read the ELF header, as you have before, and sanity check its
++	//     magic number.  (Check out your load_icode!)
++	//
++	//   - Set child_tf to an initial struct Trapframe for the child.
++	//
++	//   - Call the init_stack() function above to set up
++	//     the initial stack page for the child environment.
++	//
++	//   - Map all of the program's segments that are of p_type
++	//     ELF_PROG_LOAD into the new environment's address space.
++	//     Use the p_flags field in the Proghdr for each segment
++	//     to determine how to map the segment:
++	//
++	//	* If the ELF flags do not include ELF_PROG_FLAG_WRITE,
++	//	  then the segment contains text and read-only data.
++	//	  Use read_map() to read the contents of this segment,
++	//	  and map the pages it returns directly into the child
++	//        so that multiple instances of the same program
++	//	  will share the same copy of the program text.
++	//        Be sure to map the program text read-only in the child.
++	//        Read_map is like read but returns a pointer to the data in
++	//        *blk rather than copying the data into another buffer.
++	//
++	//	* If the ELF segment flags DO include ELF_PROG_FLAG_WRITE,
++	//	  then the segment contains read/write data and bss.
++	//	  As with load_icode() in Lab 3, such an ELF segment
++	//	  occupies p_memsz bytes in memory, but only the FIRST
++	//	  p_filesz bytes of the segment are actually loaded
++	//	  from the executable file - you must clear the rest to zero.
++	//        For each page to be mapped for a read/write segment,
++	//        allocate a page in the parent temporarily at UTEMP,
++	//        read() the appropriate portion of the file into that page
++	//	  and/or use memset() to zero non-loaded portions.
++	//	  (You can avoid calling memset(), if you like, if
++	//	  page_alloc() returns zeroed pages already.)
++	//        Then insert the page mapping into the child.
++	//        Look at init_stack() for inspiration.
++	//        Be sure you understand why you can't use read_map() here.
++	//
++	//     Note: None of the segment addresses or lengths above
++	//     are guaranteed to be page-aligned, so you must deal with
++	//     these non-page-aligned values appropriately.
++	//     The ELF linker does, however, guarantee that no two segments
++	//     will overlap on the same page; and it guarantees that
++	//     PGOFF(ph->p_offset) == PGOFF(ph->p_va).
++	//
++	//   - Call sys_env_set_trapframe(child, &child_tf) to set up the
++	//     correct initial eip and esp values in the child.
++	//
++	//   - Start the child process running with sys_env_set_status().
++
++        new_tf = (*thisenv).env_tf;
++        cprintf("made new_tf page\n");
++
++	// Set up trap frame, including initial stack.
++
++	if ((r = init_stack(argv, &(new_tf.tf_esp))) < 0)
++            goto error;
++
++        cprintf("init_stack done\n");
++
++	sys_exec(UTEMPNEWSTACK, &new_tf, prog);
++
++        // sys_exec should not return
++	return -1;
++
++error:
++	return r;
++}
++
++// Exec, taking command-line arguments array directly on the stack.
++// NOTE: Must have a sentinal of NULL at the end of the args
++// (none of the args may be NULL).
++int
++execl(const char *prog, const char *arg0, ...)
++{
++	// We calculate argc by advancing the args until we hit NULL.
++	// The contract of the function guarantees that the last
++	// argument will always be NULL, and that none of the other
++	// arguments will be NULL.
++	int argc=0;
++	va_list vl;
++	va_start(vl, arg0);
++	while(va_arg(vl, void *) != NULL)
++		argc++;
++	va_end(vl);
++
++	// Now that we have the size of the args, do a second pass
++	// and store the values in a VLA, which has the format of argv
++	const char *argv[argc+2];
++	argv[0] = arg0;
++	argv[argc+1] = NULL;
++
++	va_start(vl, arg0);
++	unsigned i;
++	for(i=0;i<argc;i++)
++		argv[i+1] = va_arg(vl, const char *);
++	va_end(vl);
++	return exec(prog, argv);
++}
++
++
++// Set up the initial stack page for the new child process with envid 'child'
++// using the arguments array pointed to by 'argv',
++// which is a null-terminated array of pointers to null-terminated strings.
++//
++// On success, returns 0 and sets *init_esp
++// to the initial stack pointer with which the child should start.
++// Returns < 0 on failure.
++static int
++init_stack(const char **argv, uintptr_t *init_esp)
++{
++	size_t string_size;
++	int argc, i, r;
++	char *string_store;
++	uintptr_t *argv_store;
++
++	// Count the number of arguments (argc)
++	// and the total amount of space needed for strings (string_size).
++	string_size = 0;
++	for (argc = 0; argv[argc] != 0; argc++)
++		string_size += strlen(argv[argc]) + 1;
++
++	// Determine where to place the strings and the argv array.
++	// Set up pointers into the temporary page 'UTEMP'; we'll map a page
++	// there later, then remap that page into the child environment
++	// at (USTACKTOP - PGSIZE).
++	// strings is the topmost thing on the stack.
++	string_store = (char*) UTEMPNEWSTACK + PGSIZE - string_size;
++	// argv is below that.  There's one argument pointer per argument, plus
++	// a null pointer.
++	argv_store = (uintptr_t*) (ROUNDDOWN(string_store, 4) - 4 * (argc + 1));
++
++	// Make sure that argv, strings, and the 2 words that hold 'argc'
++	// and 'argv' themselves will all fit in a single stack page.
++	if ((void*) (argv_store - 2) < (void*) UTEMPNEWSTACK)
++		return -E_NO_MEM;
++
++	// Allocate the single stack page at UTEMPNEWSTACK.
++	if ((r = sys_page_alloc(0, (void*) UTEMPNEWSTACK, PTE_P|PTE_U|PTE_W)) < 0)
++		return r;
++
++
++	//	* Initialize 'argv_store[i]' to point to argument string i,
++	//	  for all 0 <= i < argc.
++	//	  Also, copy the argument strings from 'argv' into the
++	//	  newly-allocated stack page.
++	//
++	//	* Set 'argv_store[argc]' to 0 to null-terminate the args array.
++	//
++	//	* Push two more words onto the child's stack below 'args',
++	//	  containing the argc and argv parameters to be passed
++	//	  to the child's umain() function.
++	//	  argv should be below argc on the stack.
++	//	  (Again, argv should use an address valid in the child's
++	//	  environment.)
++	//
++	//	* Set *init_esp to the initial stack pointer for the child,
++	//	  (Again, use an address valid in the child's environment.)
++	for (i = 0; i < argc; i++) {
++		argv_store[i] = UTEMP2USTACK(string_store);
++		strcpy(string_store, argv[i]);
++		string_store += strlen(argv[i]) + 1;
++	}
++	argv_store[argc] = 0;
++	assert(string_store == (char*)UTEMPNEWSTACK + PGSIZE);
++
++	argv_store[-1] = UTEMP2USTACK(argv_store);
++	argv_store[-2] = argc;
++
++	*init_esp = UTEMP2USTACK(&argv_store[-2]);
++
++	return 0;
++
++error:
++	sys_page_unmap(0, UTEMPNEWSTACK);
++	return r;
++}
+diff --git a/lib/syscall.c b/lib/syscall.c
+index 22f467a..2a395b2 100644
+--- a/lib/syscall.c
++++ b/lib/syscall.c
+@@ -117,3 +117,8 @@ sys_ipc_recv(void *dstva, envid_t from_env)
+ 	return syscall(SYS_ipc_recv, 1, (uint32_t)dstva, from_env, 0, 0, 0);
+ }
+ 
++int
++sys_exec(void *newstack, struct Trapframe *newtf, const char *prog){
++        return syscall(SYS_exec, 0, (uint32_t) newstack, (uint32_t) newtf, (uint32_t) prog, 0, 0);
++}
++
+diff --git a/user/exechello.c b/user/exechello.c
+index e69de29..bbbda21 100644
+--- a/user/exechello.c
++++ b/user/exechello.c
+@@ -0,0 +1,10 @@
++#include <inc/lib.h>
++
++void
++umain(int argc, char **argv)
++{
++	int r;
++	cprintf("i am parent environment %08x\n", thisenv->env_id);
++	if ((r = execl("hello", "hello", 0)) < 0)
++		panic("exec(hello) failed: %e", r);
++}

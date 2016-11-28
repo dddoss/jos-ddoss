@@ -35,7 +35,8 @@ enum {
 	ENV_DYING,
 	ENV_RUNNABLE,
 	ENV_RUNNING,
-	ENV_NOT_RUNNABLE
+	ENV_NOT_RUNNABLE,
+        ENV_NUM_STATUSES
 };
 
 // Special environment types
@@ -66,6 +67,7 @@ struct Env {
 	void *env_ipc_dstva;		// VA at which to map received page
 	uint32_t env_ipc_value;		// Data value sent to us
 	envid_t env_ipc_from;		// envid of the sender
+        envid_t env_ipc_from_req;       // envid of the only allowed sender, or -1
 	int env_ipc_perm;		// Perm of page mapping received
 };
 

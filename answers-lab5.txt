@@ -1,0 +1,10 @@
+1. No, you don't need do do anything else to ensure this setting is saved, because eflags are saved and restored using popfl and pushfl when we switch environments.
+
+Challenge:
+I attempted to implement a UNIX-style exec user library call for my lab 5 challenge. I was unsuccessful and have given up due to time constraints; however, I'll describe my methodology and what I would try next, were I to spend more time on this problem.
+
+My failed attempt deviated fairly heavily from the microkernel philosophy of JOS by relying on a system call, sys_exec, which did most of the difficult work of changing the calling environment to execute the new code. In user-space, the calling environment initialized a new Trapframe to replace its original Trapframe and created a stack for that new Trapframe (with parameters included). In kernel-space, the kernel cleared the user space pages, loaded the new elf header and program segments, remapped the user tack, set the trapframe, and finally yielded; this way, when the calling environment was next scheduled, it would execute the new code.
+
+This required considerable refactoring of user libraries to allow the kernel to make the required library calls in order to read the file from disk (among other smaller changes). This is where I became stuck, unable to load the needed library calls in a kernel-accessible manner.
+
+In future attempts, I would first try to load the elf header and program segments into temporary user space, which would then be remapped in the kernel. If that didn't work, I would switch to a much more microkernel/exokernel-style call, and have the user exec call actually create a temporary child process; the child would modify the parent to run the new code specified by the file and exit.
