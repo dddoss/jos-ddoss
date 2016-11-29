@@ -208,6 +208,8 @@ trap_dispatch(struct Trapframe *tf)
 	// LAB 6: Your code here.
 
         case IRQ_OFFSET + IRQ_TIMER:
+            if (cpunum() == 0)
+                time_tick();
             lapic_eoi();
             sched_yield();
             return; // Never reached
