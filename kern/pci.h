@@ -30,4 +30,8 @@ struct pci_bus {
 int  pci_init(void);
 void pci_func_enable(struct pci_func *f);
 
+// Information for E1000 Device
+#define E1000_VENDOR_ID     0x8086
+#define E1000_DEVICE_ID     0x100E
+
 #endif
