@@ -293,7 +293,7 @@ region_alloc(struct Env *e, void *va, size_t len, bool zero_pages)
 	//   (Watch out for corner-cases!)
 
         uintptr_t va_round = ROUNDDOWN((uintptr_t)va, PGSIZE);
-        size_t len_round = ROUNDUP(len, PGSIZE);
+        size_t len_round = ROUNDUP(((uintptr_t)va-va_round)+len, PGSIZE);
         uintptr_t va_iter;
         uintptr_t va_removeiter; // Only used if allocation fails
 
