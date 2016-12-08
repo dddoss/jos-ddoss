@@ -12,6 +12,7 @@
 #include <kern/console.h>
 #include <kern/sched.h>
 #include <kern/time.h>
+#include <kern/e1000.h>
 
 // For the given permission set, check that all required
 // flags are present and all given flags are in the set
@@ -449,6 +450,25 @@ sys_time_msec(void)
         return time_msec();
 }
 
+// Use the E1000 software stack to send a packet of data
+// with the specified source at most specified length.
+//
+// If len is >= E1000_ETH_PACKET_LEN, the driver will
+// truncate the packet at that length and attempt to send it.
+//
+// Returns 0 on success.
+// Returns <0 on error. Errors are:
+//      -E_INVAL if the range [srcva, srcva+len) is not mapped or
+//          if the user does not have read permissions on this region.
+static int
+sys_send_packet(void *srcva, size_t len)
+{
+    if (user_mem_check(curenv, srcva, len, PTE_U) < 0)
+        return -E_INVAL;
+
+    return E1000_transmit(srcva, len);
+}
+
 // Dispatches to the correct kernel function, passing the arguments.
 int32_t
 syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
@@ -491,6 +511,8 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
             return sys_env_set_trapframe((envid_t) a1, (struct Trapframe *) a2);
         case SYS_time_msec:
             return sys_time_msec();
+        case SYS_send_packet:
+            return sys_send_packet((void *) a1, (size_t) a2);
         default:
             return -E_INVAL;
 	}

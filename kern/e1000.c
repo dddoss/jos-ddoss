@@ -5,8 +5,8 @@
 // LAB 6: Your driver code here
 
 volatile void *e1000addr;
-struct e1000_tx_desc txd_arr[E1000_TXDARR_LEN];
-packet_t txd_bufs[E1000_TXDARR_LEN];
+struct e1000_tx_desc txd_arr[E1000_TXDARR_LEN] __attribute__((aligned(4096)));
+packet_t txd_bufs[E1000_TXDARR_LEN] __attribute__((aligned(4096)));
 
 /* Reset the TXD array entry corresponding to the given
  * index such that it may be resused for another packet.
@@ -46,10 +46,8 @@ int attach_E1000(struct pci_func *pcif)
 
 int E1000_transmit(void * data_addr, uint16_t length)
 {
-    cprintf("Call to E1000_transmit\n");
     static uint32_t nextindex = 0;
     struct e1000_tx_desc *nextdesc = (&txd_arr[nextindex]);
-    cprintf("Loc of txd_buff %d: 0x%x\n", nextindex, (uint32_t)(txd_arr[nextindex].buffer_addr));
 
     if (!(nextdesc->status & E1000_TXD_STAT_DD))
         return -1; // TODO: Error code; no free descriptors
@@ -60,14 +58,8 @@ int E1000_transmit(void * data_addr, uint16_t length)
     _reset_tdr(nextindex);  // Reset this TDR
     nextdesc->length = length;
     memcpy((txd_bufs+nextindex), data_addr, length);
-    cprintf("Printing data: [");
-    uint8_t *data = (uint8_t *)(txd_bufs+nextindex);
-    for (int i = 0; i<length-1; i++)
-        cprintf("%d, ", data[i]);
-    cprintf("%d]\n", data[length-1]);
 
     nextindex = (nextindex+1)%E1000_TXDARR_LEN;
     *(uint32_t *)(e1000addr+E1000_TDT) = nextindex;
-    cprintf("End call to E1000_transmit\n");
     return 0;
 }
