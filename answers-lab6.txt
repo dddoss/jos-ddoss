@@ -1,0 +1,12 @@
+1. Currently, my transmit implementation is structured fairly exactly as described in the manual. Long packets are not supported (so every packet has the EOP bit set). The transmit descriptors and buffers are both statically allocated arrays. If the transmit ring is full, packets are simply dropped: This has the advantage of never blocking, but clients may not be able to recover from a slew of dropped packets.
+2. My receive implementation is relatively straightforward. The system call sys_packet_receive accepts two addresses: one to store the packet data, and another to store the length of the returned packet. The buffers and descriptors are statically allocated arrays forced to be aligned as needed by the e1000 hardware. In the case of a receive underflow, an error message is returned and the calling environment is expected to simply retry.
+3. The web page has a title "This file came from JOS." and a marquee text scrolling from right to left saying "Cheesy web page!".
+4. This lab took me approximately 20 hours to complete.
+
+Challenge: reading MAC address from EEPROM.
+
+I chose to read the hardware mac address from EEPROM to replace the hard-coded values present in the JOS kernel. I used the EEPROM software access feature (reading via E1000_EERD). My implementation included a publically visible function in e1000.c, E1000_get_macaddr, which either returned a previously-retrieved mac address or dynamically retrieved and stored that data from the EEPROM interface. I seperately wrote a local function, _read_eeprom, which accepted an EEPROM-address (defined in the e1000.h header) and returned the 16-byte data value retrieved by the EEPROM software interface. 
+
+The _read_eeprom function writes the EERD_START and the given address to the EERD register. It then continually polls the register until the EERD_START bit is cleared (to avoid a race condition whereupon the EERD_DONE bit might not have yet been cleared by hardware from previous calls). The data is then retrieved from the reggister and returned by the calling function.
+
+E1000_get_macaddr is exposed via a system call to the user library. This is then called within lwip to dynamically load the mac address into the netif struct.
