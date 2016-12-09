@@ -1,12 +1,15 @@
 #include <kern/e1000.h>
 #include <kern/pmap.h>
 #include <inc/string.h>
+#include <inc/error.h>
 
 // LAB 6: Your driver code here
 
 volatile void *e1000addr;
 struct e1000_tx_desc txd_arr[E1000_TXDARR_LEN] __attribute__((aligned(4096)));
+struct e1000_rx_desc rxd_arr[E1000_RXDARR_LEN] __attribute__((aligned(4096)));
 packet_t txd_bufs[E1000_TXDARR_LEN] __attribute__((aligned(4096)));
+packet_t rxd_bufs[E1000_RXDARR_LEN] __attribute__((aligned(4096)));
 
 /* Reset the TXD array entry corresponding to the given
  * index such that it may be resused for another packet.
@@ -20,6 +23,16 @@ void _reset_tdr(int index)
     txd_arr[index].css = 0;
     txd_arr[index].special = 0;
 }
+
+/* Reset the RXD array entry corresponding to the given
+ * index such that it may be reused for another packet.
+ */
+void _reset_rdr(int index)
+{
+    rxd_arr[index].buffer_addr = (uint32_t)(PADDR(rxd_bufs+index));
+    rxd_arr[index].status = 0;
+    rxd_arr[index].special = 0;
+}
 int attach_E1000(struct pci_func *pcif)
 {
     pci_func_enable(pcif);
@@ -27,7 +40,7 @@ int attach_E1000(struct pci_func *pcif)
 
 
     // Initialize MMIO Region
-    // Manual section 14.5 initialization
+    // Transmit initialization
     *(uint32_t *)(e1000addr+E1000_TDBAL) = (uint32_t)(PADDR(txd_arr)); // Indicates start of descriptor ring buffer
     *(uint32_t *)(e1000addr+E1000_TDBAH) = 0; // Make sure high bits are set to 0
     *(uint16_t *)(e1000addr+E1000_TDLEN) = (uint16_t)(sizeof(struct e1000_tx_desc)*E1000_TXDARR_LEN); // Indicates length of descriptor ring buffer
@@ -41,6 +54,19 @@ int attach_E1000(struct pci_func *pcif)
         _reset_tdr(i);
         txd_arr[i].status = E1000_TXD_STAT_DD;
     }
+
+    // Receive initialization
+    *(uint32_t *)(e1000addr+E1000_RAL) = E1000_ETH_MAC_LOW; // Set mac address for filtering
+    *(uint32_t *)(e1000addr+E1000_RAH) = E1000_ETH_MAC_HIGH;
+    *(uint32_t *)(e1000addr+E1000_RDBAL) = (uint32_t)(PADDR(rxd_arr)); // Indicates start of descriptor ring buffer
+    *(uint32_t *)(e1000addr+E1000_RDBAH) = 0; // Make sure high bits are set to 0
+    *(uint16_t *)(e1000addr+E1000_RDLEN) = (uint16_t)(sizeof(struct e1000_rx_desc)*E1000_RXDARR_LEN); // Indicates length of descriptor ring buffer
+    *(uint32_t *)(e1000addr+E1000_RDH) = 0;
+    *(uint32_t *)(e1000addr+E1000_RDT) = E1000_RXDARR_LEN;
+
+    for (int i = 0; i< E1000_RXDARR_LEN; i++)
+        _reset_rdr(i);
+    *(uint32_t *)(e1000addr+E1000_RCTL) = (E1000_RCTL_EN | E1000_RCTL_BAM | E1000_RCTL_BSIZE | E1000_RCTL_SECRC);
     return 0;
 }
 
@@ -50,7 +76,7 @@ int E1000_transmit(void * data_addr, uint16_t length)
     struct e1000_tx_desc *nextdesc = (&txd_arr[nextindex]);
 
     if (!(nextdesc->status & E1000_TXD_STAT_DD))
-        return -1; // TODO: Error code; no free descriptors
+        return -E_TXD_FULL; // no free descriptors, buffer is full
 
     if (length > E1000_ETH_PACKET_LEN)
         length = E1000_ETH_PACKET_LEN;
@@ -61,5 +87,22 @@ int E1000_transmit(void * data_addr, uint16_t length)
 
     nextindex = (nextindex+1)%E1000_TXDARR_LEN;
     *(uint32_t *)(e1000addr+E1000_TDT) = nextindex;
+    return 0;
+}
+
+int E1000_receive(void * data_addr, uint16_t *len_store)
+{
+    static uint32_t nextindex = 0;
+    struct e1000_rx_desc *nextdesc = (&rxd_arr[nextindex]);
+
+    if (!(nextdesc->status & E1000_RXD_STAT_DD))
+        return -E_RXD_EMPTY; // Buffer is empty
+
+    *len_store = nextdesc->length;
+    memcpy(data_addr, (rxd_bufs+nextindex), nextdesc->length);
+    _reset_rdr(nextindex);
+
+    *(uint32_t *)(e1000addr+E1000_RDT) = nextindex;
+    nextindex = (nextindex+1)%E1000_RXDARR_LEN;
     return 0;
 }

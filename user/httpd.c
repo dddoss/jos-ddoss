@@ -74,10 +74,16 @@ send_header(struct http_request *req, int code)
 }
 
 static int
-send_data(struct http_request *req, int fd)
+send_data(struct http_request *req, int fd, off_t filesize)
 {
 	// LAB 6: Your code here.
-	panic("send_data not implemented");
+        int r;
+        sys_page_alloc(0, UTEMP, PTE_U|PTE_P|PTE_W);
+        void *buf = (void *)UTEMP;
+        read(fd, buf, filesize);
+        write(req->sock, buf, filesize);
+        sys_page_unmap(0, UTEMP);
+        return 0;
 }
 
 static int
@@ -223,7 +229,27 @@ send_file(struct http_request *req)
 	// set file_size to the size of the file
 
 	// LAB 6: Your code here.
-	panic("send_file not implemented");
+
+        fd = open(req->url, O_RDONLY);
+        if (fd == -E_NOT_FOUND)
+            send_error(req, 404);
+        else if (fd < 0){
+            r = fd;
+            goto end;
+        }
+
+        r = sys_page_alloc(0, UTEMP, PTE_P | PTE_U | PTE_W);
+        if (r < 0)
+            goto end;
+        struct Stat *fdstat = (struct Stat *)UTEMP;
+        fstat(fd, fdstat);
+        file_size = fdstat->st_size;
+        bool is_dir = fdstat->st_isdir;
+        sys_page_unmap(0, UTEMP);
+
+
+        if (is_dir)
+            send_error(req, 404);
 
 	if ((r = send_header(req, 200)) < 0)
 		goto end;
@@ -237,7 +263,8 @@ send_file(struct http_request *req)
 	if ((r = send_header_fin(req)) < 0)
 		goto end;
 
-	r = send_data(req, fd);
+        cprintf("sending data\n");
+	r = send_data(req, fd, file_size);
 
 end:
 	close(fd);

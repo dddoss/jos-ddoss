@@ -128,3 +128,9 @@ sys_send_packet(void *srcva, size_t len)
 {
 	return syscall(SYS_send_packet, 1, (uint32_t)srcva, (uint32_t)len, 0, 0, 0);
 }
+
+int
+sys_recv_packet(void *srcva, size_t *len_store)
+{
+	return syscall(SYS_recv_packet, 1, (uint32_t)srcva, (uint32_t)len_store, 0, 0, 0);
+}
