@@ -134,3 +134,9 @@ sys_recv_packet(void *srcva, size_t *len_store)
 {
 	return syscall(SYS_recv_packet, 1, (uint32_t)srcva, (uint32_t)len_store, 0, 0, 0);
 }
+
+void
+sys_get_macaddr(uint64_t *addr_store)
+{
+        syscall(SYS_get_macaddr, 0, (uint32_t) addr_store, 0, 0, 0, 0);
+}

@@ -3,9 +3,10 @@
 #include <kern/pci.h>
 
 // Kernel functions
-int attach_E1000(struct pci_func *pcif);
+int E1000_attach(struct pci_func *pcif);
 int E1000_transmit(void * data_addr, uint16_t length);
 int E1000_receive(void * data_addr, uint16_t *len_store);
+uint64_t E1000_get_macaddr();
 
 #define E1000_TXDARR_LEN     32 /* Length of the transmit descriptor ring */
 
@@ -41,7 +42,7 @@ struct e1000_tx_desc {
 #define E1000_TXD_STAT_TU    (uint8_t)0x08      /* Transmit underrun */
 #define E1000_TXD_CMD_TCP    (uint8_t)0x01      /* TCP packet */
 #define E1000_TXD_CMD_IP     (uint8_t)0x02      /* IP packet */
-#/* Transmit Control */
+/* Transmit Control */
 #define E1000_TCTL_EN     0x00000002    /* enable tx */
 #define E1000_TCTL_PSP    0x00000008    /* pad short packets */
 #define E1000_TCTL_CT     0x00000100    /* collision threshold */
@@ -69,10 +70,6 @@ struct e1000_rx_desc {
 #define E1000_RCTL_BAM            0x00008000    /* broadcast enable */
 #define E1000_RCTL_BSIZE          0x00000000
 #define E1000_RCTL_SECRC          0x04000000    /* Strip Ethernet CRC */
-/* Ethernet Specifications */
-#define E1000_ETH_MAC_HIGH      (uint32_t)0x80005634
-#define E1000_ETH_MAC_LOW       (uint32_t)0x12005452
-#define E1000_ETH_PACKET_LEN    1518
 /* Receive Descriptor bit definitions */
 #define E1000_RXD_STAT_DD       0x01    /* Descriptor Done */
 #define E1000_RXD_STAT_EOP      0x02    /* End of Packet */
@@ -93,6 +90,18 @@ struct e1000_rx_desc {
 #define E1000_RXD_ERR_IPE       0x40    /* IP Checksum Error */
 #define E1000_RXD_ERR_RXE       0x80    /* Rx Data Error */
 
+/* EEPROM.EERD Bit Definitions */
+#define E1000_EERD_START        0x00000001
+#define E1000_EERD_DONE         0x00000010
+#define E1000_EERD_MAC_WD0      0x00000000
+#define E1000_EERD_MAC_WD1      0x00000100
+#define E1000_EERD_MAC_WD2      0x00000200
+#define E1000_EERD_DATA_SHIFT   0x10
+
+/* Ethernet Specifications */
+#define E1000_ETH_MAC_HIGH      (uint32_t)0x80005634
+#define E1000_ETH_MAC_LOW       (uint32_t)0x12005452
+#define E1000_ETH_PACKET_LEN    1518
 typedef uint8_t packet_t[2048];
 
 /* Register Set. (82543, 82544)
@@ -108,6 +117,7 @@ typedef uint8_t packet_t[2048];
  * A - register array
  */
 
+#define E1000_EERD     0x00014  /* EEPROM Read - RW */
 #define E1000_RCTL     0x00100  /* RX Control - RW */
 #define E1000_TCTL     0x00400  /* TX Control - RW */
 #define E1000_TIPG     0x00410  /* TX Inter-packet gap -RW */

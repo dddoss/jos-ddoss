@@ -10,6 +10,31 @@ struct e1000_tx_desc txd_arr[E1000_TXDARR_LEN] __attribute__((aligned(4096)));
 struct e1000_rx_desc rxd_arr[E1000_RXDARR_LEN] __attribute__((aligned(4096)));
 packet_t txd_bufs[E1000_TXDARR_LEN] __attribute__((aligned(4096)));
 packet_t rxd_bufs[E1000_RXDARR_LEN] __attribute__((aligned(4096)));
+uint64_t macaddr = 0;
+
+uint16_t _read_eeprom(uint32_t addr)
+{
+    volatile uint32_t *eerd = (uint32_t *)(e1000addr+E1000_EERD);
+    volatile uint16_t data = 0;
+    *eerd = E1000_EERD_START | addr;
+    while ((*eerd & E1000_EERD_START) == 1); // Continually poll until we have a response
+
+    data = *eerd >> 16;
+    return data;
+}
+
+uint64_t E1000_get_macaddr()
+{
+    if (macaddr > 0)
+        return macaddr;
+
+    uint64_t word0 = _read_eeprom(E1000_EERD_MAC_WD0);
+    uint64_t word1 = _read_eeprom(E1000_EERD_MAC_WD1);
+    uint64_t word2 = _read_eeprom(E1000_EERD_MAC_WD2);
+    uint64_t word3 = (uint64_t)0x8000;
+    macaddr = word3<<48 | word2<<32 | word1<<16 | word0;
+    return macaddr;
+}
 
 /* Reset the TXD array entry corresponding to the given
  * index such that it may be resused for another packet.
@@ -33,7 +58,7 @@ void _reset_rdr(int index)
     rxd_arr[index].status = 0;
     rxd_arr[index].special = 0;
 }
-int attach_E1000(struct pci_func *pcif)
+int E1000_attach(struct pci_func *pcif)
 {
     pci_func_enable(pcif);
     e1000addr = mmio_map_region(pcif->reg_base[0], pcif->reg_size[0]);
@@ -56,8 +81,9 @@ int attach_E1000(struct pci_func *pcif)
     }
 
     // Receive initialization
-    *(uint32_t *)(e1000addr+E1000_RAL) = E1000_ETH_MAC_LOW; // Set mac address for filtering
-    *(uint32_t *)(e1000addr+E1000_RAH) = E1000_ETH_MAC_HIGH;
+    uint64_t macaddr_local = E1000_get_macaddr();
+    *(uint32_t *)(e1000addr+E1000_RAL) = (uint32_t)(macaddr_local & 0xffffffff); // Set mac address for filtering
+    *(uint32_t *)(e1000addr+E1000_RAH) = (uint32_t)(macaddr_local>>32);
     *(uint32_t *)(e1000addr+E1000_RDBAL) = (uint32_t)(PADDR(rxd_arr)); // Indicates start of descriptor ring buffer
     *(uint32_t *)(e1000addr+E1000_RDBAH) = 0; // Make sure high bits are set to 0
     *(uint16_t *)(e1000addr+E1000_RDLEN) = (uint16_t)(sizeof(struct e1000_rx_desc)*E1000_RXDARR_LEN); // Indicates length of descriptor ring buffer
